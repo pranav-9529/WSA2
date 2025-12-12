@@ -20,6 +20,8 @@ import 'package:wsa2/demo2/videoscreen.dart';
 import 'package:wsa2/screens/auth/login_page.dart';
 import 'package:wsa2/screens/auth/signup_page.dart';
 import 'package:wsa2/screens/folder.dart';
+import 'package:wsa2/screens/home.dart';
+import 'package:wsa2/screens/home_page.dart';
 import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
 import 'package:wsa2/screens/onbording/onbording.dart';
@@ -99,6 +101,8 @@ class FirstPage extends StatelessWidget {
                       name: "Route finder page",
                       pagename: RouteFinderPage(),
                     ),
+                    SizedBox(height: 10),
+                    button1(name: "homepage", pagename: WomenSafetyApp()),
                     SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: () {
