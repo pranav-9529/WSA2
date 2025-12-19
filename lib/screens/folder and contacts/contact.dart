@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // import 'package:safecircle/Theme/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsa2/Theme/colors.dart';
-import '../service/api_service.dart';
+import '../../service/api_service.dart';
 
 class ContactScreen extends StatefulWidget {
   final Map folder;

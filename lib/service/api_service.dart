@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -252,5 +253,93 @@ class ApiService2 {
     } catch (e) {
       return {"success": false, "message": "Invalid response: $e"};
     }
+  }
+}
+
+// ======================================================
+// RECORDING API
+// ======================================================
+class RecordingApiService {
+  static const String baseUrl = "https://wsa-1.onrender.com/api/recordings";
+
+  // -------- GET TOKEN --------
+  static Future<String> _token() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+    if (token == null) {
+      throw Exception("Token missing");
+    }
+    return token;
+  }
+
+  // -------- GET USER ID --------
+  static Future<String> _userID() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userID = prefs.getString("userID");
+    if (userID == null) {
+      throw Exception("UserID missing");
+    }
+    return userID;
+  }
+
+  // ---------------- UPLOAD RECORDING ----------------
+  static Future<void> uploadRecording(File audioFile) async {
+    final token = await _token();
+    final userID = await _userID();
+
+    print("UPLOAD TOKEN => $token");
+    print("UPLOAD USERID => $userID");
+
+    final request = http.MultipartRequest(
+      "POST",
+      Uri.parse("$baseUrl/upload/$_userID"), // ✅ USER ID ADDED
+    );
+
+    request.headers["Authorization"] = "Bearer $token";
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        "audio", // MUST match backend
+        audioFile.path,
+      ),
+    );
+
+    final res = await request.send();
+    final body = await res.stream.bytesToString();
+
+    print("UPLOAD STATUS => ${res.statusCode}");
+    print("UPLOAD BODY => $body");
+
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception("Upload failed");
+    }
+  }
+
+  // ---------------- GET MY RECORDINGS ----------------
+  static Future<List<dynamic>> getMyRecordings() async {
+    final token = await _token();
+    final userID = await _userID();
+
+    final res = await http.get(
+      Uri.parse("$baseUrl/user/$userID"), // ✅ USER FILTER
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      throw Exception("Failed to fetch recordings");
+    }
+  }
+
+  // ---------------- DELETE ----------------
+  static Future<void> deleteRecording(String id) async {
+    final token = await _token();
+    final userID = await _userID();
+
+    await http.delete(
+      Uri.parse("$baseUrl/$id/$userID"), // ✅ USER SAFE DELETE
+      headers: {"Authorization": "Bearer $token"},
+    );
   }
 }

@@ -1,30 +1,19 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// import 'package:safecircle/demo2/YTvideo.dart';
-// import 'package:safecircle/demo2/assetvideo.dart';
-// import 'package:safecircle/demo2/videomodel.dart';
-// import 'package:safecircle/demo2/videoplayscreen.dart';
-// import 'package:safecircle/demo2/videoscreen.dart';
-// import 'package:safecircle/screens/folder.dart';
-// import 'package:safecircle/screens/auth/login_page.dart';
-// import 'package:safecircle/screens/auth/signup_page.dart';
-// import 'package:safecircle/screens/map/map.dart';
-// import 'package:safecircle/screens/map/map1.dart';
-// import 'package:safecircle/screens/map/map_page.dart';
-// import 'package:safecircle/screens/onbording/onbording.dart';
-// import 'package:video_player/video_player.dart';
 import 'package:wsa2/demo2/assetvideo.dart';
 import 'package:wsa2/demo2/videoscreen.dart';
-// import 'package:wsa2/folder.dart';
 import 'package:wsa2/screens/auth/login_page.dart';
 import 'package:wsa2/screens/auth/signup_page.dart';
-import 'package:wsa2/screens/folder.dart';
+import 'package:wsa2/screens/folder%20and%20contacts/folder.dart';
 import 'package:wsa2/screens/home.dart';
 import 'package:wsa2/screens/home_page.dart';
 import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
 import 'package:wsa2/screens/onbording/onbording.dart';
+import 'package:wsa2/screens/mainHome.dart';
+import 'package:wsa2/screens/recording/recording1.dart';
+import 'package:geocoding/geocoding.dart';
 
 void main() {
   runApp(const MyApp());
@@ -102,7 +91,9 @@ class FirstPage extends StatelessWidget {
                       pagename: RouteFinderPage(),
                     ),
                     SizedBox(height: 10),
-                    button1(name: "homepage", pagename: WomenSafetyApp()),
+                    button1(name: "Main Home Page", pagename: Homepage()),
+                    SizedBox(height: 20),
+                    button1(name: "Recording page", pagename: RecordScreen()),
                     SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: () {

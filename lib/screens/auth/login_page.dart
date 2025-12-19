@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wsa2/Theme/colors.dart';
+import 'package:wsa2/screens/mainHome.dart';
 // import 'package:safecircle/Theme/colors.dart';
 import '../../service/api_service.dart';
 import '../home_page.dart';
@@ -38,7 +39,7 @@ class _LoginPageState extends State<LoginPage> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomePage()),
+        MaterialPageRoute(builder: (context) => Homepage()),
       );
     }
   }
