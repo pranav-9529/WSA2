@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:path/path.dart';
 import 'package:wsa2/Theme/colors.dart';
 import 'package:wsa2/screens/folder%20and%20contacts/folder.dart';
 import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
 import 'package:wsa2/service/locationservice.dart';
 import 'package:wsa2/service/nearby_service.dart';
-import 'package:wsa2/widgets/live_location_appbar.dart';
+import 'package:wsa2/widgets/live_location_appbar2.dart';
 import 'package:wsa2/widgets/nearby_card.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -18,36 +18,81 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
+  //String userName = "User";
+
   String police = "Loading...";
   String hospital = "Loading...";
+  double? userLat;
+  double? userLon;
+
+  Future<String> getUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('userName') ?? "User";
+  }
+
+  String fname = "User";
 
   @override
   void initState() {
     super.initState();
-    loadNearbyPlaces();
+    loadUserName();
+    Future.microtask(loadNearbyPlaces);
   }
+
+  Future<void> loadUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      fname = prefs.getString('userName') ?? "User";
+    });
+  }
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   _loadUserName();
+  //   Future.microtask(loadNearbyPlaces);
+  // }
+
+  // Future<void> _loadUserName() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final name = prefs.getString('username') ?? "User";
+  //   setState(() {
+  //     userName = name;
+  //   });
+  // }
 
   Future<void> loadNearbyPlaces() async {
     final location = await LocationService.getCurrentLocation();
-    if (location == null) return;
+    if (location == null) {
+      setState(() {
+        police = "Location not available";
+        hospital = "Location not available";
+      });
+      return;
+    }
+
+    userLat = location.latitude;
+    userLon = location.longitude;
 
     final policeList = await NearbyService.fetchNearby(
-      lat: location.latitude!,
-      lon: location.longitude!,
+      lat: userLat!,
+      lon: userLon!,
       type: "police",
     );
 
     final hospitalList = await NearbyService.fetchNearby(
-      lat: location.latitude!,
-      lon: location.longitude!,
+      lat: userLat!,
+      lon: userLon!,
       type: "hospital",
     );
 
     setState(() {
-      police = policeList.isNotEmpty ? policeList.first : "No police nearby";
+      police = policeList.isNotEmpty
+          ? policeList.take(3).join("\n• ")
+          : "No police station found nearby";
+
       hospital = hospitalList.isNotEmpty
-          ? hospitalList.first
-          : "No hospital nearby";
+          ? hospitalList.take(3).join("\n• ")
+          : "No hospital found nearby";
     });
   }
 
@@ -55,7 +100,8 @@ class _HomepageState extends State<Homepage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const LiveLocationAppBar(),
+      // appBar: LiveLocationAppBar(latitude: userLat, longitude: userLon),
+      appBar: UserLocationAppBar(userDisplayName: fname),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -64,10 +110,10 @@ class _HomepageState extends State<Homepage> {
               height: 200,
               width: double.infinity,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [
-                    const Color.fromARGB(255, 255, 255, 255),
-                    const Color(0xFFF3A3BE),
+                    Color.fromARGB(255, 255, 255, 255),
+                    Color(0xFFF3A3BE),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -122,26 +168,25 @@ class _HomepageState extends State<Homepage> {
                 ),
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             NearbyCard(
-              title: "Nearby Police S. with in 10 Km.",
+              title: "Nearby Police S. within 10 Km.",
               subtitle: police,
               icon: Icons.local_police,
               onTap: () {
                 // later open map
               },
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             NearbyCard(
-              title: "Nearby Hospital with in 10 Km.",
+              title: "Nearby Hospital within 10 Km.",
               subtitle: hospital,
               icon: Icons.local_hospital,
               onTap: () {
                 // later open map
               },
             ),
-            SizedBox(height: 20),
-
+            const SizedBox(height: 20),
             Row(
               children: [
                 card1(
@@ -149,13 +194,13 @@ class _HomepageState extends State<Homepage> {
                   cardname: "Sage Route",
                   pagename: RouteFinderPage(),
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 card1(
                   image: "assets/images/track.png",
                   cardname: "Track me",
                   pagename: MapPage(),
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 card1(
                   image: "assets/images/image 9.png",
                   cardname: "Sage Route",

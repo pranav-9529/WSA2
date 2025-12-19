@@ -6,6 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   static const String baseUrl = "https://wsa-1.onrender.com/api/auth";
 
+  // ---------------------- SAVE USERNAME ----------------------
+  static Future<void> saveUserName(String fname) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fname', fname);
+  }
+
   // ---------------------- SAVE USERID ----------------------
   static Future<void> saveUserID(String userID) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();

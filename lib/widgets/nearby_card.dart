@@ -20,7 +20,7 @@ class NearbyCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 80,
+        height: 90,
         width: 370,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
