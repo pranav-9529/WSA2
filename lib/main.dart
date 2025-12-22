@@ -1,19 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:wsa2/demo2/assetvideo.dart';
-import 'package:wsa2/demo2/videoscreen.dart';
 import 'package:wsa2/screens/auth/login_page.dart';
 import 'package:wsa2/screens/auth/signup_page.dart';
 import 'package:wsa2/screens/folder%20and%20contacts/folder.dart';
-import 'package:wsa2/screens/home.dart';
-import 'package:wsa2/screens/home_page.dart';
 import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
 import 'package:wsa2/screens/onbording/onbording.dart';
 import 'package:wsa2/screens/mainHome.dart';
 import 'package:wsa2/screens/recording/recording1.dart';
-import 'package:geocoding/geocoding.dart';
 
 void main() {
   runApp(const MyApp());
@@ -83,8 +78,7 @@ class FirstPage extends StatelessWidget {
                     // ),
                     SizedBox(height: 10),
                     button1(name: "folder screen", pagename: FolderScreen()),
-                    SizedBox(height: 10),
-                    button1(name: "video screen", pagename: VideoScreen()),
+
                     SizedBox(height: 10),
                     button1(
                       name: "Route finder page",
@@ -95,19 +89,7 @@ class FirstPage extends StatelessWidget {
                     SizedBox(height: 20),
                     button1(name: "Recording page", pagename: RecordScreen()),
                     SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AssetVideoScreen(
-                              assetPath: "videos/video1.mp4",
-                            ),
-                          ),
-                        );
-                      },
-                      child: Text("Play Safety Video"),
-                    ),
+
                     SizedBox(height: 10),
                     ElevatedButton(
                       onPressed: () {

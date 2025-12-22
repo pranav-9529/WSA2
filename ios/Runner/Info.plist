@@ -31,6 +31,15 @@
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UISupportedInterfaceOrientations</key>
+	<key>UIBackgroundModes</key>
+<array>
+    <string>audio</string>
+</array>
+<key>NSMicrophoneUsageDescription</key>
+<string>Emergency wake word detection requires microphone access</string>
+<key>NSContactsUsageDescription</key>
+<string>Access contacts for emergency alerts</string>
+
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>

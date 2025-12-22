@@ -7,9 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
-// import 'package:url_launcher/url_launcher.dart';
 import 'package:wsa2/Theme/colors.dart';
-// import 'package:material_symbols_icons/material_symbols_icons.dart';
 
 void main() {
   runApp(const MyApp());
@@ -75,18 +73,22 @@ class MapPage extends StatefulWidget {
   State<MapPage> createState() => _MapPageState();
 }
 
-class _MapPageState extends State<MapPage> {
+class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final Location location = Location();
   StreamSubscription<LocationData>? locationSub;
 
   final MapController mapController = MapController();
 
+  late final AnimationController _pulseController;
+
   List<LatLng> routePoints = [];
 
-  double liveLat = 0.0;
-  double liveLon = 0.0;
+  double liveLat = 19.8658; // Jalna fallback
+  double liveLon = 75.8872;
   bool locationReady = false;
   bool loadingPlaces = false;
+
+  bool _isMounted = true;
 
   Map<String, List<NearbyPlace>> byType = {
     'hospital': [],
@@ -105,11 +107,20 @@ class _MapPageState extends State<MapPage> {
   @override
   void initState() {
     super.initState();
+
+    // IMPORTANT: initialize controller BEFORE anything that can trigger build
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
     _initLocation();
   }
 
   @override
   void dispose() {
+    _isMounted = false;
+    _pulseController.dispose();
     locationSub?.cancel();
     _placesTimer?.cancel();
     super.dispose();
@@ -119,38 +130,49 @@ class _MapPageState extends State<MapPage> {
     bool serviceEnabled = await location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await location.requestService();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        if (_isMounted) {
+          setState(() => locationReady = true);
+        }
+        return;
+      }
     }
 
     PermissionStatus permission = await location.hasPermission();
     if (permission == PermissionStatus.denied) {
       permission = await location.requestPermission();
-      if (permission != PermissionStatus.granted) return;
+      if (permission != PermissionStatus.granted) {
+        if (_isMounted) {
+          setState(() => locationReady = true);
+        }
+        return;
+      }
     }
 
-    location.changeSettings(accuracy: LocationAccuracy.high, interval: 1000);
+    location.changeSettings(accuracy: LocationAccuracy.high, interval: 2000);
 
     final loc = await location.getLocation();
-    setState(() {
-      liveLat = loc.latitude ?? 0.0;
-      liveLon = loc.longitude ?? 0.0;
-      locationReady = true;
-    });
+    if (_isMounted) {
+      setState(() {
+        liveLat = loc.latitude ?? liveLat;
+        liveLon = loc.longitude ?? liveLon;
+        locationReady = true;
+      });
+    }
 
-    _fetchAllPlaces(); // initial fetch
+    _fetchAllPlaces();
 
     locationSub = location.onLocationChanged.listen((locData) {
+      if (!_isMounted) return;
       setState(() {
-        liveLat = locData.latitude ?? 0.0;
-        liveLon = locData.longitude ?? 0.0;
-        locationReady = true;
+        liveLat = locData.latitude ?? liveLat;
+        liveLon = locData.longitude ?? liveLon;
       });
       _schedulePlacesFetch();
     });
   }
 
   void _schedulePlacesFetch() {
-    // Only fetch if moved more than 0.5 km
     if (_lastFetchLat != null &&
         _lastFetchLon != null &&
         NearbyPlace._haversineKm(
@@ -167,12 +189,14 @@ class _MapPageState extends State<MapPage> {
     _lastFetchLon = liveLon;
 
     _placesTimer?.cancel();
-    _placesTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted) _fetchAllPlaces();
+    _placesTimer = Timer(const Duration(seconds: 2), () {
+      if (_isMounted) _fetchAllPlaces();
     });
   }
 
   Future<void> _fetchAllPlaces() async {
+    if (!_isMounted) return;
+
     setState(() => loadingPlaces = true);
 
     final types = ['hospital', 'police', 'pharmacy', 'fire_station'];
@@ -180,7 +204,9 @@ class _MapPageState extends State<MapPage> {
       byType[type] = await _fetchNearby(type);
     }
 
-    setState(() => loadingPlaces = false);
+    if (_isMounted) {
+      setState(() => loadingPlaces = false);
+    }
   }
 
   Future<List<NearbyPlace>> _fetchNearby(String type) async {
@@ -188,47 +214,61 @@ class _MapPageState extends State<MapPage> {
 
     switch (type) {
       case 'hospital':
-      case 'store':
       case 'police':
       case 'fire_station':
         query = 'node["amenity"="$type"](around:6000,$liveLat,$liveLon);';
         break;
-      case 'Medical':
-        // Fetch both amenity=pharmacy and shop=chemist
+      case 'pharmacy':
         query =
-            'node["amenity"="Medical"](around:6000,$liveLat,$liveLon);'
-            'node["shop"="chemist"](around:6000,$liveLat,$liveLon);';
+            '''
+    (
+      node["amenity"="pharmacy"](around:6000,$liveLat,$liveLon);
+      node["shop"="chemist"](around:6000,$liveLat,$liveLon);
+      node["amenity"="doctors"](around:6000,$liveLat,$liveLon);
+      node["healthcare"="pharmacy"](around:6000,$liveLat,$liveLon);
+      node["amenity"="pharmacy"](around:6000,$liveLat,$liveLon);
+      
+    );
+  ''';
         break;
-      // You can add more types here if needed
     }
+
+    if (query.isEmpty) return [];
 
     final url = Uri.parse(
       'https://overpass-api.de/api/interpreter?data=[out:json];$query out;',
     );
 
-    final res = await http.get(url);
-    if (res.statusCode != 200) return [];
+    try {
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return [];
 
-    final data = json.decode(res.body);
-    final List elements = data['elements'] ?? [];
+      final data = json.decode(res.body);
+      final List elements = data['elements'] ?? [];
 
-    return elements
-        .map((e) {
-          final double lat = e['lat'];
-          final double lon = e['lon'];
-          final name = e['tags']?['name'] ?? 'Unknown $type';
-          return NearbyPlace(
-            id: e['id'].toString(),
-            name: name,
-            type: type,
-            lat: lat,
-            lon: lon,
-            distanceKm: NearbyPlace._haversineKm(liveLat, liveLon, lat, lon),
-          );
-        })
-        .where((p) => p.distanceKm <= 6.0)
-        .toList()
-      ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+      final places = elements
+          .map<NearbyPlace>((e) {
+            final double lat = (e['lat'] ?? 0.0).toDouble();
+            final double lon = (e['lon'] ?? 0.0).toDouble();
+            final name = e['tags']?['name'] ?? 'Unknown $type';
+            return NearbyPlace(
+              id: e['id'].toString(),
+              name: name,
+              type: type,
+              lat: lat,
+              lon: lon,
+              distanceKm: NearbyPlace._haversineKm(liveLat, liveLon, lat, lon),
+            );
+          })
+          .where((p) => p.lat != 0.0 && p.lon != 0.0 && p.distanceKm <= 6.0)
+          .toList();
+
+      places.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+      return places;
+    } catch (e) {
+      print('Overpass error: $e');
+      return [];
+    }
   }
 
   IconData _iconForType(String type) {
@@ -249,87 +289,71 @@ class _MapPageState extends State<MapPage> {
   Color _colorForType(String type) {
     switch (type) {
       case 'hospital':
-        return const Color(0xFFE53935); // Red
+        return const Color(0xFFE53935);
       case 'police':
-        return const Color(0xFF1E88E5); // Deep blue
+        return const Color(0xFF1E88E5);
       case 'pharmacy':
-        return const Color(0xFF43A047); // Green
+        return const Color(0xFF43A047);
       case 'fire_station':
-        return const Color(0xFFFF8F00); // Orange
+        return const Color(0xFFFF8F00);
       default:
-        return Colors.grey; // Neutral
+        return Colors.grey;
     }
   }
-
-  // Future<void> _openInMaps(NearbyPlace p) async {
-  //   final uri = Uri.parse(
-  //     'https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}',
-  //   );
-  //   if (await canLaunchUrl(uri)) {
-  //     await launchUrl(uri, mode: LaunchMode.externalApplication);
-  //   }
-  // }
 
   Future<void> _getRoute(double destLat, double destLon) async {
-    // fetch fresh location so route always starts from current device position
-    final currentLoc = await location.getLocation();
+    try {
+      final currentLoc = await location.getLocation();
+      final startLat = currentLoc.latitude ?? liveLat;
+      final startLon = currentLoc.longitude ?? liveLon;
 
-    final double startLat = currentLoc.latitude!;
-    final double startLon = currentLoc.longitude!;
+      final url = Uri.parse(
+        'http://router.project-osrm.org/route/v1/driving/'
+        '$startLon,$startLat;$destLon,$destLat?overview=full&geometries=geojson',
+      );
 
-    print("Start from: $startLat , $startLon"); // debug
-    print("Destination: $destLat , $destLon");
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (!_isMounted) return;
 
-    // Notice the OSRM order -> LON, LAT
-    final url = Uri.parse(
-      'http://router.project-osrm.org/route/v1/driving/'
-      '$startLon,$startLat;$destLon,$destLat?overview=full&geometries=geojson',
-    );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final coords =
+            (data['routes']?[0]?['geometry']?['coordinates'] ?? []) as List;
 
-    final res = await http.get(url);
+        if (coords.isEmpty) return;
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      final coords = data["routes"][0]["geometry"]["coordinates"];
-
-      setState(() {
-        routePoints = coords
-            .map<LatLng>((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
-            .toList();
-      });
-    } else {
-      print("ROUTE API ERROR: ${res.statusCode}");
+        setState(() {
+          routePoints = coords
+              .map<LatLng>(
+                (c) =>
+                    LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
+              )
+              .toList();
+        });
+      } else {
+        print('ROUTE API ERROR: ${res.statusCode}');
+      }
+    } catch (e) {
+      print('Route error: $e');
     }
   }
-
-  // ------- share location function ----------------------
-  // void shareLocation(double lat, double lon) async {
-  //   // Step 1: Make the map URL
-  //   String mapUrl = "https://www.google.com/maps?q=$lat,$lon";
-
-  //   // Step 2: Encode the text properly
-  //   String encodedText = Uri.encodeFull("📍 My Current Location:\n$mapUrl");
-
-  //   // Step 3: WhatsApp app URL
-  //   final Uri whatsappUri = Uri.parse("whatsapp://send?text=$encodedText");
-
-  //   // Step 4: Launch WhatsApp
-  //   if (await canLaunchUrl(whatsappUri)) {
-  //     await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
-  //   } else {
-  //     print("WhatsApp is not installed");
-  //   }
-  // }
 
   @override
   Widget build(BuildContext context) {
     if (!locationReady) {
       return Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-            color: AppColors.loder,
-            strokeWidth: 4,
-            strokeCap: StrokeCap.round,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: AppColors.loder,
+                strokeWidth: 4,
+                strokeCap: StrokeCap.round,
+              ),
+              const SizedBox(height: 16),
+              Text("Getting your location...", style: AppTextStyles.body3),
+            ],
           ),
         ),
       );
@@ -340,68 +364,152 @@ class _MapPageState extends State<MapPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Live Location", style: AppTextStyles.heading),
-        automaticallyImplyLeading: true,
         backgroundColor: AppColors.background,
+        automaticallyImplyLeading: true,
+        elevation: 0,
       ),
       body: Stack(
         children: [
           FlutterMap(
+            mapController: mapController,
             options: MapOptions(
               initialCenter: LatLng(liveLat, liveLon),
               initialZoom: 15,
+              minZoom: 3,
+              maxZoom: 19,
             ),
             children: [
               TileLayer(
                 urlTemplate:
-                    "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
-                subdomains: const ['a', 'b', 'c'],
+                    'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                userAgentPackageName: 'com.example.app',
               ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: routePoints,
-                    strokeWidth: 6,
-                    color: Colors.blue,
-                  ),
-                ],
-              ),
-
+              if (routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: routePoints,
+                      strokeWidth: 6,
+                      color: Colors.blue.withOpacity(0.8),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
+                  // pulsing current location marker LatLng(liveLat, liveLon)
                   Marker(
                     point: LatLng(liveLat, liveLon),
-                    width: 150,
-                    height: 150,
-                    child: Container(
-                      height: 5,
-                      width: 5,
-                      decoration: BoxDecoration(
-                        color: const Color(0x00398DF4),
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(
-                          color: Color.fromARGB(69, 54, 99, 248),
-                          width: 60,
-                        ),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.my_location,
-                          color: const Color(0xFF3663F8),
-                        ),
-                      ),
+                    width: 120,
+                    height: 120,
+                    child: AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        return Container(
+                          width: 120,
+                          height: 120,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Pulsing outer circle (Google Maps style)
+                              Container(
+                                width: 80 + (20 * _pulseController.value),
+                                height: 80 + (20 * _pulseController.value),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: [
+                                      Colors.blue.withOpacity(
+                                        0.6 * _pulseController.value,
+                                      ),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(
+                                        0.4 * _pulseController.value,
+                                      ),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Inner pulse ring
+                              Container(
+                                width: 60 + (10 * (1 - _pulseController.value)),
+                                height:
+                                    60 + (10 * (1 - _pulseController.value)),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.blue.withOpacity(0.8),
+                                    width: 3,
+                                  ),
+                                ),
+                              ),
+                              // Main location icon
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.blue.shade500,
+                                      Colors.blue.shade700,
+                                    ],
+                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(0.5),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.location_on,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
+                  // nearby places markers
                   ...places.map(
                     (p) => Marker(
                       point: LatLng(p.lat, p.lon),
-                      width: 40,
-                      height: 40,
-                      child: InkWell(
+                      width: 45,
+                      height: 45,
+                      child: GestureDetector(
                         onTap: () => _getRoute(p.lat, p.lon),
-                        child: Icon(
-                          _iconForType(p.type),
-                          color: _colorForType(p.type),
-                          size: 32,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                _colorForType(p.type).withOpacity(0.2),
+                                _colorForType(p.type),
+                              ],
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: _colorForType(p.type).withOpacity(0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _iconForType(p.type),
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -410,247 +518,173 @@ class _MapPageState extends State<MapPage> {
               ),
             ],
           ),
-          // Bottom sheet
-          Stack(
-            children: [
-              DraggableScrollableSheet(
-                initialChildSize: 0.32,
-                minChildSize: 0.28,
-                maxChildSize: 0.6,
-                builder: (context, controller) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(22),
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          blurRadius: 14,
-                          offset: Offset(0, -4),
-                          color: Colors.black26,
-                        ),
-                      ],
+
+          // draggable bottom sheet with list
+          Positioned.fill(
+            bottom: 0,
+            child: DraggableScrollableSheet(
+              initialChildSize: 0.32,
+              minChildSize: 0.28,
+              maxChildSize: 0.6,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(22),
                     ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          top: 80,
-                          left: 0,
-                          child: Container(
-                            height: 500,
-                            width: 500,
-                            decoration: BoxDecoration(
-                              color: AppColors.background,
-                            ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 14,
+                        offset: Offset(0, -4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 46,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 50,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.card,
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                height: 36,
+                                width: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.button,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Icon(Icons.map),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  "Nearest Safety Stations",
+                                  style: AppTextStyles.body3,
+                                ),
+                              ),
+                              Container(
+                                height: 36,
+                                width: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.button,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Icon(Icons.arrow_downward_rounded),
+                              ),
+                            ],
                           ),
                         ),
-                        Column(
-                          children: [
-                            const SizedBox(height: 8),
-                            Container(
-                              width: 46,
-                              height: 5,
-                              decoration: BoxDecoration(
-                                color: Colors.black26,
-                                borderRadius: BorderRadius.circular(99),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              height: 50,
-                              width: 350,
-                              decoration: BoxDecoration(
-                                color: AppColors.card,
-                                borderRadius: BorderRadius.circular(50),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      height: 50,
-                                      width: 50,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.button,
-                                        borderRadius: BorderRadius.circular(
-                                          100,
+                      ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: SizedBox(
+                          height: 42,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children:
+                                [
+                                      'hospital',
+                                      'police',
+                                      'pharmacy',
+                                      'fire_station',
+                                    ]
+                                    .map(
+                                      (type) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8,
+                                        ),
+                                        child: ChoiceChip(
+                                          label: Text(type.toUpperCase()),
+                                          selected: selectedType == type,
+                                          onSelected: (_) {
+                                            setState(() => selectedType = type);
+                                          },
                                         ),
                                       ),
-                                      child: Icon(Icons.map),
-                                    ),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      "Nearest Safesty Satation",
-                                      style: AppTextStyles.body3,
-                                    ),
-                                    SizedBox(width: 40),
-                                    Container(
-                                      height: 50,
-                                      width: 50,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.button,
-                                        borderRadius: BorderRadius.circular(
-                                          100,
-                                        ),
-                                      ),
-                                      child: Icon(Icons.arrow_downward_rounded),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: SizedBox(
-                                height: 42,
-                                child: ListView(
-                                  controller: controller,
-                                  scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  children:
-                                      [
-                                            'hospital',
-                                            'police',
-                                            'pharmacy',
-                                            'fire_station',
-                                            'General Srote',
-                                          ]
-                                          .map(
-                                            (type) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 8,
-                                              ),
-                                              child: ChoiceChip(
-                                                label: Text(type.toUpperCase()),
-                                                selected: selectedType == type,
-                                                onSelected: (_) => setState(
-                                                  () => selectedType = type,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildPlaceList(controller, places),
-                            ),
-                          ],
+                                    )
+                                    .toList(),
+                          ),
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              // share location button
-              Positioned(
-                bottom: 730,
-                left: 320,
-
-                child: GestureDetector(
-                  onTap: () {
-                    // share logic
-                  },
-                  child: Container(
-                    height: 45,
-                    width: 45,
-                    decoration: BoxDecoration(
-                      color: AppColors.button,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.share,
-                        color: const Color.fromARGB(255, 0, 0, 0),
-                        size: 28,
                       ),
-                      onPressed: () {
-                        // shareLocation(liveLat, liveLon);
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              // help location button
-              Positioned(
-                bottom: 680,
-                left: 320,
-
-                child: GestureDetector(
-                  onTap: () {
-                    // share logic
-                  },
-                  child: Container(
-                    height: 45,
-                    width: 45,
-                    decoration: BoxDecoration(
-                      color: AppColors.button,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.help_outline,
-                        color: const Color.fromARGB(255, 0, 0, 0),
-                        size: 28,
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: _buildPlaceList(scrollController, places),
+                        ),
                       ),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (_) => HelpPopup(),
-                        );
-                      },
-                    ),
+                    ],
                   ),
-                ),
-              ),
-              // my location button
-              Positioned(
-                bottom: 628,
-                left: 320,
+                );
+              },
+            ),
+          ),
 
-                child: GestureDetector(
-                  onTap: () async {
-                    // Fetch location
+          // floating location & help buttons
+          Positioned(
+            top: 20,
+            right: 20,
+            child: Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'loc',
+                  backgroundColor: AppColors.button,
+                  onPressed: () async {
                     final loc = await location.getLocation();
-
-                    setState(() {
-                      liveLat = loc.latitude!;
-                      liveLon = loc.longitude!;
-                    });
-
-                    print("LIVE LOCATION UPDATED 👉  $liveLat , $liveLon");
-
-                    // Move map to new location
-                    mapController.move(LatLng(liveLat, liveLon), 16.0);
+                    if (!_isMounted) return;
+                    if (loc.latitude != null && loc.longitude != null) {
+                      setState(() {
+                        liveLat = loc.latitude!;
+                        liveLon = loc.longitude!;
+                      });
+                      mapController.move(LatLng(liveLat, liveLon), 16);
+                    }
                   },
-                  child: Container(
-                    height: 48,
-                    width: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.button,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 5,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.my_location,
-                      color: const Color.fromARGB(255, 0, 0, 0),
-                      size: 25,
-                    ),
-                  ),
+                  child: const Icon(Icons.my_location, color: Colors.black),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'help',
+                  mini: true,
+                  backgroundColor: AppColors.button,
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => const HelpPopup(),
+                    );
+                  },
+                  child: const Icon(Icons.help_outline, color: Colors.black),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -661,7 +695,7 @@ class _MapPageState extends State<MapPage> {
     ScrollController controller,
     List<NearbyPlace> places,
   ) {
-    if (loadingPlaces)
+    if (loadingPlaces) {
       return Center(
         child: CircularProgressIndicator(
           color: AppColors.loder,
@@ -669,40 +703,40 @@ class _MapPageState extends State<MapPage> {
           strokeCap: StrokeCap.round,
         ),
       );
-    if (places.isEmpty)
+    }
+
+    if (places.isEmpty) {
       return Center(
-        child: Text("No nearby places within 6 km", style: AppTextStyles.body1),
+        child: Text(
+          "No nearby ${selectedType}s within 6 km",
+          style: AppTextStyles.body1,
+        ),
       );
+    }
 
     return ListView.builder(
       controller: controller,
       itemCount: places.length,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(12),
       itemBuilder: (context, index) {
         final p = places[index];
-        final isActive = selectedPlace?.id == p.id;
         return Card(
           color: AppColors.card,
-          elevation: isActive ? 6 : 2,
+          elevation: 4,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
           child: ListTile(
             leading: Icon(_iconForType(p.type), color: _colorForType(p.type)),
-
             title: Text(p.name, style: AppTextStyles.body3),
             subtitle: Text(
               "${p.distanceKm.toStringAsFixed(2)} km away",
               style: AppTextStyles.cardtext1,
             ),
-            //------------------- add nevigate for direction from here --------
-            // trailing: isActive
-            //     ? TextButton(
-            //         onPressed: () => _getRoute(p.lat, p.lon),
-            //         child: Text("Navigate", style: AppTextStyles.redbutton),
-            //       )
-            //     : null,
-            // onTap: () => setState(() => selectedPlace = p),
+            trailing: IconButton(
+              icon: const Icon(Icons.navigation, color: Colors.blue),
+              onPressed: () => _getRoute(p.lat, p.lon),
+            ),
           ),
         );
       },
@@ -720,12 +754,11 @@ class HelpPopup extends StatelessWidget {
       insetPadding: const EdgeInsets.all(20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Title
-            Text(
+            const Text(
               "How to Use the Map",
               style: TextStyle(
                 fontSize: 22,
@@ -733,60 +766,35 @@ class HelpPopup extends StatelessWidget {
                 color: Colors.black87,
               ),
             ),
-
             const SizedBox(height: 15),
-
-            // Help content
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("📍 Your Location:", style: AppTextStyles.subHeading),
-                SizedBox(height: 4),
-                Text(
-                  "Shows your current GPS location on the map.",
-                  style: AppTextStyles.body3,
-                ),
-
-                SizedBox(height: 12),
-                Text("🔵 Nearby Places:", style: AppTextStyles.subHeading),
-                SizedBox(height: 4),
-                Text(
-                  "Police stations, hospitals, pharmacies and fire stations will "
-                  "automatically appear within 6 km.",
-                  style: AppTextStyles.body3,
-                ),
-
-                SizedBox(height: 12),
-                Text("🛣 Track Route:", style: AppTextStyles.subHeading),
-                SizedBox(height: 4),
-                Text(
-                  "Tap any marker to view name, type, and route button.",
-                  style: AppTextStyles.body3,
-                ),
-                SizedBox(height: 12),
-                Text("📩 Share Location:", style: AppTextStyles.subHeading),
-                SizedBox(height: 4),
-                Text(
-                  "Using Share location button you can share current location.",
-                  style: AppTextStyles.body3,
-                ),
-              ],
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("📍 Your Location:"),
+                  SizedBox(height: 4),
+                  Text("Blue pulsing dot shows your current GPS location."),
+                  SizedBox(height: 12),
+                  Text("🛡 Nearby Places:"),
+                  SizedBox(height: 4),
+                  Text(
+                    "Hospitals, police, pharmacies, and fire stations appear within 6 km.",
+                  ),
+                  SizedBox(height: 12),
+                  Text("🛣 Routes:"),
+                  SizedBox(height: 4),
+                  Text(
+                    "Tap any marker or navigation icon to draw a blue route.",
+                  ),
+                ],
+              ),
             ),
-
-            const SizedBox(height: 25),
-
-            // Close button
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  elevation: 3, // shadow size
-                  shadowColor: const Color.fromARGB(
-                    201,
-                    0,
-                    0,
-                    0,
-                  ), // shadow color
                   backgroundColor: AppColors.button,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -794,7 +802,7 @@ class HelpPopup extends StatelessWidget {
                 ),
                 onPressed: () => Navigator.pop(context),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Text("Close", style: AppTextStyles.button1),
                 ),
               ),
