@@ -4,11 +4,13 @@ import 'package:wsa2/Theme/colors.dart';
 import 'package:wsa2/screens/folder%20and%20contacts/folder.dart';
 import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
+import 'package:wsa2/screens/recording/RecordingPage.dart';
 import 'package:wsa2/service/locationservice.dart';
 import 'package:wsa2/service/nearby_service.dart';
 import 'package:wsa2/widgets/live_location_appbar2.dart';
 import 'package:wsa2/widgets/nearby_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -191,7 +193,7 @@ class _HomepageState extends State<Homepage> {
               children: [
                 card1(
                   image: "assets/images/safe.png",
-                  cardname: "Sage Route",
+                  cardname: "Safe Route",
                   pagename: RouteFinderPage(),
                 ),
                 const SizedBox(width: 10),
@@ -203,10 +205,25 @@ class _HomepageState extends State<Homepage> {
                 const SizedBox(width: 10),
                 card1(
                   image: "assets/images/image 9.png",
-                  cardname: "Sage Route",
+                  cardname: "Contacts",
                   pagename: FolderScreen(),
                 ),
               ],
+            ),
+            SizedBox(height: 10),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => RecordingScreen()),
+                );
+              },
+              child: Container(
+                height: 50,
+                width: double.infinity,
+                decoration: BoxDecoration(color: Colors.white),
+                child: Center(child: Text("Recording Page")),
+              ),
             ),
           ],
         ),

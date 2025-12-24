@@ -43,9 +43,6 @@ dependencies:
   url_launcher: ^6.3.2
   material_symbols_icons: ^4.2892.0
   
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   record: ^6.1.2
   just_audio: ^0.10.5
@@ -54,6 +51,19 @@ dependencies:
   geocoding: ^4.0.0
   speech_to_text: ^7.3.0
   flutter_map_animations: ^0.9.0
+
+  # recording
+  flutter_sound: ^9.30.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  permission_handler: ^12.0.1
+  intl: ^0.20.2
+  audioplayers: ^6.5.1
+  share_plus: ^12.0.1
+
+  # video
+  youtube_player_flutter: ^9.0.1
+
   
 
   
@@ -61,8 +71,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  # hive_generator: ^2.0.1
-  # build_runner: ^2.10.4
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.13
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

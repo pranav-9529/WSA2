@@ -145,6 +145,15 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
+            SizedBox(height: 5),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  child: Text("Forgot Password?", style: AppTextStyles.body3),
+                ),
+              ],
+            ),
             SizedBox(height: 20),
             GestureDetector(
               onTap: loading ? null : loginUser,
