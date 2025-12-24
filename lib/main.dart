@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive_flutter/adapters.dart';
+import 'package:wsa2/models/recording_model.dart';
 import 'package:wsa2/screens/auth/login_page.dart';
 import 'package:wsa2/screens/auth/signup_page.dart';
 import 'package:wsa2/screens/folder%20and%20contacts/folder.dart';
@@ -8,9 +10,16 @@ import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
 import 'package:wsa2/screens/onbording/onbording.dart';
 import 'package:wsa2/screens/mainHome.dart';
-import 'package:wsa2/screens/recording/recording1.dart';
+import 'package:wsa2/screens/recording/RecordingPage.dart';
+import 'package:wsa2/screens/video/video.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Hive.initFlutter();
+  Hive.registerAdapter(RecordingModelAdapter());
+  await Hive.openBox<RecordingModel>('recordings');
+
   runApp(const MyApp());
 }
 
@@ -86,17 +95,20 @@ class FirstPage extends StatelessWidget {
                     ),
                     SizedBox(height: 10),
                     button1(name: "Main Home Page", pagename: Homepage()),
-                    SizedBox(height: 20),
-                    button1(name: "Recording page", pagename: RecordScreen()),
-                    SizedBox(height: 20),
 
+                    SizedBox(height: 20),
+                    button1(
+                      name: "Video Page",
+                      pagename: VideoListPage(videos: videos),
+                    ),
+                    SizedBox(height: 20),
                     SizedBox(height: 10),
                     ElevatedButton(
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const MapPage(),
+                            builder: (_) => const RecordingScreen(),
                           ),
                         );
                       },
@@ -110,7 +122,7 @@ class FirstPage extends StatelessWidget {
                         ),
                       ),
                       child: const Text(
-                        "Open Map",
+                        "Recording page ",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
