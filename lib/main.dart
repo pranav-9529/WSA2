@@ -53,7 +53,7 @@ class FirstPage extends StatelessWidget {
                 image: NetworkImage(
                   "https://wallpapers.com/images/hd/neon-colored-peacock-feather-bzoqdr609msdh9m6.jpg",
                 ),
-                fit: BoxFit.cover, // fills full page
+                fit: BoxFit.cover,
               ),
             ),
           ),

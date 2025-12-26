@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsa2/Theme/colors.dart';
 import 'package:wsa2/models/recording_model.dart';
+import 'package:wsa2/screens/main_bottom_nav.dart';
 import 'package:wsa2/service/recording_service.dart';
 
 class RecordingScreen extends StatefulWidget {
@@ -214,17 +215,26 @@ class _RecordingScreenState extends State<RecordingScreen>
   @override
   Widget build(BuildContext context) {
     if (recordingsBox == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.loder,
+            strokeWidth: 4,
+            strokeCap: StrokeCap.round,
+          ),
+        ),
+      );
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text("WSA Recorder")),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text("WSA Recorder", style: AppTextStyles.heading),
+      ),
       body: Column(
         children: [
           const SizedBox(height: 20),
-
-          /// 🎙 ANIMATED RECORD BUTTON
           Center(
             child: GestureDetector(
               onTap: recording ? stopRecording : startRecording,
@@ -413,6 +423,7 @@ class _RecordingScreenState extends State<RecordingScreen>
           ),
         ],
       ),
+      bottomNavigationBar: const WSABottomBar(currentIndex: 1),
     );
   }
 }

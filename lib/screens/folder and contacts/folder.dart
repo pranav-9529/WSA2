@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-// import 'package:safecircle/Theme/colors.dart';
-// import 'package:safecircle/screens/contact.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsa2/Theme/colors.dart';
 import 'package:wsa2/screens/folder%20and%20contacts/contact.dart';
-// import 'package:wsa2/contact.dart';
+import 'package:wsa2/screens/main_bottom_nav.dart';
 import '../../service/api_service.dart';
 
 class FolderScreen extends StatefulWidget {

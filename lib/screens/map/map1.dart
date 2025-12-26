@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
 import 'package:wsa2/Theme/colors.dart';
+import 'package:wsa2/screens/main_bottom_nav.dart';
 
 void main() {
   runApp(const MyApp());
@@ -688,6 +689,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
           ),
         ],
       ),
+
+      bottomNavigationBar: const WSABottomBar(currentIndex: 4),
     );
   }
 

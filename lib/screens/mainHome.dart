@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wsa2/Theme/colors.dart';
 import 'package:wsa2/screens/folder%20and%20contacts/folder.dart';
+import 'package:wsa2/screens/main_bottom_nav.dart';
 import 'package:wsa2/screens/map/map1.dart';
 import 'package:wsa2/screens/map/route_finder_page.dart';
-import 'package:wsa2/screens/recording/RecordingPage.dart';
 import 'package:wsa2/service/locationservice.dart';
 import 'package:wsa2/service/nearby_service.dart';
 import 'package:wsa2/widgets/live_location_appbar2.dart';
 import 'package:wsa2/widgets/nearby_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/material.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -20,6 +19,7 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
+  int _currentIndex = 0;
   //String userName = "User";
 
   String police = "Loading...";
@@ -47,20 +47,6 @@ class _HomepageState extends State<Homepage> {
       fname = prefs.getString('userName') ?? "User";
     });
   }
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   _loadUserName();
-  //   Future.microtask(loadNearbyPlaces);
-  // }
-
-  // Future<void> _loadUserName() async {
-  //   final prefs = await SharedPreferences.getInstance();
-  //   final name = prefs.getString('username') ?? "User";
-  //   setState(() {
-  //     userName = name;
-  //   });
-  // }
 
   Future<void> loadNearbyPlaces() async {
     final location = await LocationService.getCurrentLocation();
@@ -210,24 +196,12 @@ class _HomepageState extends State<Homepage> {
                 ),
               ],
             ),
-            SizedBox(height: 10),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => RecordingScreen()),
-                );
-              },
-              child: Container(
-                height: 50,
-                width: double.infinity,
-                decoration: BoxDecoration(color: Colors.white),
-                child: Center(child: Text("Recording Page")),
-              ),
-            ),
           ],
         ),
       ),
+
+      // bottomNavigationBar
+      bottomNavigationBar: const WSABottomBar(currentIndex: 0),
     );
   }
 }
@@ -262,7 +236,7 @@ class _card1State extends State<card1> {
         height: 115,
         width: 107,
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: const Color.fromARGB(255, 255, 255, 255),
           boxShadow: [
             BoxShadow(
               color: Colors.grey.withOpacity(0.25),
@@ -288,7 +262,7 @@ class _card1State extends State<card1> {
             const SizedBox(height: 6),
             Text(
               widget.cardname,
-              style: const TextStyle(fontSize: 14),
+              style: AppTextStyles.body1,
               overflow: TextOverflow.ellipsis,
             ),
           ],
